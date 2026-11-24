@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="$lang">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$title</title>
+  <style>
+    :root{color-scheme:light dark;--bg:light-dark(#f9fafb,#171a21);--fg:light-dark(#182032,#eef2fa);--muted:light-dark(#505d72,#bac4d5);--line:light-dark(#dbe2eb,#424956);--accent:light-dark(#245e95,#8ec1f0);--wash:light-dark(#e3ecf6,#303f50)}
+    body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif}
+    main{max-width:960px;margin:auto;padding:clamp(1rem,4vw,3rem);overflow-wrap:anywhere}
+    h1,h3,p,figure{margin:0}h1{font-size:1.8rem;line-height:1.2}h3{font-size:1rem}
+    header p:last-child{margin-top:.4rem;font-size:1.1rem}
+    small,time,.status{color:var(--muted)}section{margin:1.4rem 0}
+    ol{padding-left:1.4rem}ol li{padding:.35rem 0}ol p{color:var(--muted)}
+    .status{font-size:.85em;margin-inline-start:.3em;padding:.08rem .4rem;background:var(--wash);border-radius:.2rem}
+    .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:1rem;margin-bottom:1rem}
+    figcaption{font-weight:600;margin-bottom:.25rem}figcaption small{font-weight:400}
+    .bar{display:grid;grid-template-columns:minmax(5em,1fr) minmax(0,2.5fr) auto;gap:.55rem;align-items:center}
+    .track{height:.5rem;background:var(--wash);border-radius:1rem;overflow:hidden}
+    .track div{height:100%;background:var(--accent)}
+    .table-wrap{overflow:auto;margin-bottom:.8rem}
+    table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+    th,td{text-align:left;vertical-align:top;padding:.35rem .5rem;border-bottom:1px solid var(--line)}
+    th{white-space:nowrap}details{padding:.45rem 0;border-bottom:1px solid var(--line)}
+    summary{cursor:pointer}details p,details h3{margin:.4rem 0}
+    @media print{main{padding:0}body{background:white;color:black}.track{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style>
+</head>
+<body><main>
+  <header><h1>$title</h1><p><time>$as_of</time></p><p>$summary</p></header>
+  <section aria-label="Workflow"><ol>$stages</ol></section>
+  $metrics
+  $details
+  $sources
+</main></body>
+</html>
