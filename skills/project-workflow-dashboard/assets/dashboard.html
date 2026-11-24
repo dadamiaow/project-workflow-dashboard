@@ -8,9 +8,20 @@
     :root{color-scheme:light dark;--bg:light-dark(#f9fafb,#171a21);--fg:light-dark(#182032,#eef2fa);--muted:light-dark(#505d72,#bac4d5);--line:light-dark(#dbe2eb,#424956);--accent:light-dark(#245e95,#8ec1f0);--wash:light-dark(#e3ecf6,#303f50)}
     body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif}
     main{max-width:960px;margin:auto;padding:clamp(1rem,4vw,3rem);overflow-wrap:anywhere}
-    h1,h3,p,figure{margin:0}h1{font-size:1.8rem;line-height:1.2}h3{font-size:1rem}
+    h1,h2,h3,p,figure{margin:0}h1{font-size:1.8rem;line-height:1.2}h3{font-size:1rem}
     header p:last-child{margin-top:.4rem;font-size:1.1rem}
     small,time,.status{color:var(--muted)}section{margin:1.4rem 0}
+    .tabs{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;gap:.25rem;margin-top:1rem;padding:.35rem 0;background:var(--bg);border-block:1px solid var(--line)}
+    .tabs[hidden]{display:none}
+    .tabs button{font:inherit;padding:.5rem .65rem;color:var(--muted);background:transparent;border:0;border-bottom:2px solid transparent;cursor:pointer}
+    .tabs button[aria-selected="true"]{color:var(--accent);border-color:currentColor;font-weight:600}
+    h2{font-size:1.25rem;margin-bottom:.55rem}
+    .current-step{margin:.7rem 0 1rem;padding:.7rem .9rem;border-inline-start:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--bg))}
+    .current-step h3,.current-step .status{color:var(--accent);font-weight:600}
+    .current-step p{margin-top:.25rem}
+    .learning-heading{margin-bottom:.35rem}
+    .brief{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.25rem .75rem;margin:0}
+    .brief dt{font-weight:600}.brief dd,.brief ul{margin:0}
     ol{padding-left:1.4rem}ol li{padding:.35rem 0}ol p{color:var(--muted)}
     .status{font-size:.85em;margin-inline-start:.3em;padding:.08rem .4rem;background:var(--wash);border-radius:.2rem}
     .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:1rem;margin-bottom:1rem}
@@ -21,16 +32,79 @@
     .table-wrap{overflow:auto;margin-bottom:.8rem}
     table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     th,td{text-align:left;vertical-align:top;padding:.35rem .5rem;border-bottom:1px solid var(--line)}
-    th{white-space:nowrap}details{padding:.45rem 0;border-bottom:1px solid var(--line)}
-    summary{cursor:pointer}details p,details h3{margin:.4rem 0}
-    @media print{main{padding:0}body{background:white;color:black}.track{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    th{white-space:nowrap}
+    summary{cursor:pointer}
+    .details>details{margin:.65rem 0;border:1px solid var(--line);border-radius:.5rem}
+    .details>details>summary{padding:.6rem .85rem;font-weight:600}
+    .details>details[open]>summary{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--bg));border-bottom:1px solid var(--line);border-radius:.5rem .5rem 0 0}
+    .detail-body{margin:.65rem .85rem .75rem}
+    .detail-body>ul{padding-inline-start:1.25rem}
+    .detail-body h3{margin-top:.45rem}
+    .subsections{margin-inline-start:.3rem;padding-inline-start:.7rem;border-inline-start:2px solid var(--line)}
+    .subsections>details>summary{padding:.35rem 0;font-size:.94rem}
+    .subsections>details[open]>summary{color:var(--accent)}
+    .subsections>details+details{border-top:1px solid var(--line)}
+    @media(max-width:420px){
+      .brief{grid-template-columns:1fr;gap:.15rem}.brief dd{margin-bottom:.25rem}
+      .subsections{margin-inline-start:0;padding-inline-start:.5rem}
+    }
+    @media print{
+      main{padding:0}body{background:white;color:black}
+      .tabs{display:none}[data-tab-panel][hidden]{display:block}
+      .track{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    }
   </style>
 </head>
 <body><main>
   <header><h1>$title</h1><p><time>$as_of</time></p><p>$summary</p></header>
-  <section aria-label="Workflow"><ol>$stages</ol></section>
-  $metrics
-  $details
-  $sources
-</main></body>
+  $tabs
+  $sections
+</main>
+<script>
+  (() => {
+    const tablist = document.getElementById("dashboard-tabs");
+    if (!tablist) return;
+    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+    const panels = tabs.map(tab => document.getElementById(tab.getAttribute("aria-controls")));
+
+    function selectTab(index) {
+      tabs.forEach((tab, i) => {
+        const active = i === index;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        panels[i].hidden = !active;
+      });
+    }
+
+    tabs.forEach((tab, i) => {
+      panels[i].setAttribute("role", "tabpanel");
+      panels[i].setAttribute("aria-labelledby", tab.id);
+      panels[i].tabIndex = 0;
+      tab.addEventListener("click", () => {
+        selectTab(i);
+        window.scrollTo(0, 0);
+      });
+    });
+    selectTab(0);
+    tablist.hidden = false;
+
+    tablist.addEventListener("keydown", event => {
+      const index = tabs.indexOf(event.target);
+      if (index === -1) return;
+      let next;
+      switch (event.key) {
+        case "ArrowRight": next = (index + 1) % tabs.length; break;
+        case "ArrowLeft": next = (index + tabs.length - 1) % tabs.length; break;
+        case "Home": next = 0; break;
+        case "End": next = tabs.length - 1; break;
+        default: return;
+      }
+      event.preventDefault();
+      selectTab(next);
+      tabs[next].focus();
+      window.scrollTo(0, 0);
+    });
+  })();
+</script>
+</body>
 </html>

@@ -84,17 +84,79 @@ def render_stage(item, where):
     return f"<li><strong>{title}</strong> <span class=\"status\">{status}</span><p>{detail}</p></li>"
 
 
+def disclosure(title, body):
+    return f'<details><summary>{title}</summary><div class="detail-body">{body}</div></details>'
+
+
 def render_detail(item, where):
     item = object_value(item, where)
     title = text_field(item, "title", where)
     text = text_field(item, "text", where, required=False)
     tables = render_list(item, "tables", where, render_table)
-    return f"<details><summary>{title}</summary><p>{text}</p>{tables}</details>"
+    children = render_list(item, "children", where, render_detail)
+    body = (f"<p>{text}</p>" if text else "") + tables
+    if children:
+        body += f'<div class="subsections">{children}</div>'
+    return disclosure(title, body)
 
 
 def render_list(item, key, where, renderer, *, required=False):
     return "".join(renderer(entry, f"{where}.{key}[{i}]")
                    for i, entry in enumerate(list_field(item, key, where, required=required)))
+
+
+def render_sources(item, where):
+    sources = list_field(item, "sources", where)
+    if any(not isinstance(source, str) or not source.strip() for source in sources):
+        raise ValueError(f"{where}.sources must contain nonempty text")
+    return "".join(f"<li>{escape(source)}</li>" for source in sources)
+
+
+def render_current_step(data, label, next_label):
+    if "current_step" not in data:
+        return ""
+    step = object_value(data["current_step"], "current_step")
+    title = text_field(step, "title", "current_step")
+    status = text_field(step, "status", "current_step")
+    detail = text_field(step, "detail", "current_step", required=False)
+    next_action = text_field(step, "next_action", "current_step", required=False)
+    description = f"<p>{detail}</p>" if detail else ""
+    action = f"<p><strong>{next_label}</strong> {next_action}</p>" if next_action else ""
+    return (f'<aside class="current-step" aria-labelledby="current-step-title">'
+            f'<h3 id="current-step-title">{label}</h3>'
+            f'<p><strong>{title}</strong> <span class="status">{status}</span></p>'
+            f'{description}{action}</aside>')
+
+
+def render_learning(data, labels, field_labels):
+    def render_entry(entry, where):
+        entry = object_value(entry, where)
+        title = text_field(entry, "title", where)
+        rows = []
+        for field, label in field_labels.items():
+            value = text_field(entry, field, where, required=False)
+            if value:
+                rows.append(f"<dt>{label}</dt><dd>{value}</dd>")
+        sources = render_sources(entry, where)
+        if sources:
+            rows.append(f'<dt>{labels["sources"]}</dt><dd><ul>{sources}</ul></dd>')
+        body = f'<dl class="brief">{"".join(rows)}</dl>' if rows else ""
+        return disclosure(title, body)
+
+    entries = render_list(data, "learning", "dashboard", render_entry)
+    if not entries:
+        return ""
+    return f'<h3 class="learning-heading">{labels["learning"]}</h3><div class="details">{entries}</div>'
+
+
+def render_tabs(panels, label):
+    if len(panels) == 1:
+        return ""
+    buttons = "".join(
+        f'<button type="button" id="tab-{key}" role="tab" aria-controls="{key}">{title}</button>'
+        for key, title, _ in panels
+    )
+    return f'<div id="dashboard-tabs" class="tabs" role="tablist" aria-label="{label}" hidden>{buttons}</div>'
 
 
 def render(data):
@@ -103,19 +165,48 @@ def render(data):
     lang = data.get("lang", "en")
     if not isinstance(lang, str) or not re.fullmatch(r"[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*", lang):
         raise ValueError("dashboard.lang must be an HTML language tag, such as zh-CN")
+    chinese = lang.split("-")[0].lower() == "zh"
+    labels = {
+        "progress": "项目进度" if chinese else "Progress",
+        "results": "关键结果" if chinese else "Key results",
+        "details": "明细与来源" if chinese else "Details and sources",
+        "current_step": "当前步骤" if chinese else "Current step",
+        "learning": "试验与学习" if chinese else "Experiments and learning",
+        "sources": "来源" if chinese else "Sources",
+    }
+    overrides = object_value(data.get("labels", {}), "labels")
+    for key in labels.keys() & overrides.keys():
+        labels[key] = text_field(overrides, key, "labels")
+
+    field_labels = {
+        "question": "问题" if chinese else "Question",
+        "comparison": "比较" if chinese else "Comparison",
+        "result": "结论" if chinese else "Finding",
+        "next_step": "后续" if chinese else "Follow-up",
+    }
+    current_step = render_current_step(data, labels["current_step"], "下一步" if chinese else "Next action")
+    learning = render_learning(data, labels, field_labels)
     stages = render_list(data, "stages", "dashboard", render_stage, required=True)
     charts = render_list(data, "charts", "dashboard", render_chart)
     tables = render_list(data, "tables", "dashboard", render_table)
     details = render_list(data, "details", "dashboard", render_detail)
-    sources = list_field(data, "sources", "dashboard")
-    if any(not isinstance(source, str) or not source.strip() for source in sources):
-        raise ValueError("dashboard.sources must contain nonempty text")
-    sources = "".join(f"<li>{escape(source)}</li>" for source in sources)
+    sources = render_sources(data, "dashboard")
+
+    panels = [("progress", labels["progress"], f"{current_step}{learning}<ol>{stages}</ol>")]
+    if charts or tables:
+        charts = f'<div class="charts">{charts}</div>' if charts else ""
+        panels.append(("results", labels["results"], f"{charts}{tables}"))
+    if details or sources:
+        sources = disclosure(labels["sources"], f"<ul>{sources}</ul>") if sources else ""
+        panels.append(("details", labels["details"], f'<div class="details">{details}{sources}</div>'))
+
+    tabs = render_tabs(panels, "切换看板" if chinese else "Dashboard views")
+    sections = "".join(
+        f'<section id="{key}"{" data-tab-panel" if tabs else ""}><h2>{heading}</h2>{body}</section>'
+        for key, heading, body in panels
+    )
     return Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
-        title=title, as_of=date, summary=summary, stages=stages, lang=lang,
-        metrics=f'<section><div class="charts">{charts}</div>{tables}</section>' if charts or tables else "",
-        details=f"<section>{details}</section>" if details else "",
-        sources=f"<details><summary>Sources / 来源</summary><ul>{sources}</ul></details>" if sources else "",
+        title=title, as_of=date, summary=summary, lang=lang, tabs=tabs, sections=sections,
     ).encode("utf-8")
 
 
